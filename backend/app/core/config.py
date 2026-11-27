@@ -3,6 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -31,6 +32,31 @@ class Settings(BaseSettings):
 
     # CORS (frontend Vite)
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+    # Gemini (LangChain)
+    GEMINI_API_KEY: SecretStr | None = None
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_EMBEDDING_MODEL: str = "models/text-embedding-004"
+    GEMINI_TEMPERATURE: float = 0.2
+    GEMINI_TIMEOUT_SECONDS: float = 60.0
+    # Reintentos adicionales ante 429 / 5xx / timeouts (backoff exponencial con jitter).
+    GEMINI_MAX_RETRIES: int = 4
+    GEMINI_RETRY_INITIAL_SECONDS: float = 1.0
+    GEMINI_RETRY_MAX_SECONDS: float = 20.0
+    # Lado mayor con el que se envía la imagen original al VLM (reduce tokens y latencia).
+    VLM_MAX_IMAGE_DIMENSION: int = 1600
+
+    # RAG (ChromaDB)
+    KNOWLEDGE_BASE_DIR: Path = PROJECT_ROOT / "knowledge_base"
+    CHROMA_DIR: Path = Path("chroma_db")
+    CHROMA_COLLECTION: str = "wellness_knowledge"
+    RAG_CHUNK_SIZE: int = 1000
+    RAG_CHUNK_OVERLAP: int = 150
+    RAG_TOP_K: int = 3
+
+    # MCP
+    MCP_HISTORY_LIMIT: int = 5
+    MCP_TREND_WINDOW: int = 10
 
     @property
     def max_upload_size_bytes(self) -> int:

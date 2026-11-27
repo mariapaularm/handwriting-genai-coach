@@ -10,6 +10,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
 DEFAULT_PROFILE_NAME = "default"
+# `profile_name` se usa como carpeta en uploads/, así que solo se admiten caracteres seguros.
+PROFILE_NAME_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
 
 
 def utcnow() -> datetime:
@@ -38,8 +40,10 @@ class AnalysisRecord(Base):
     emotion: Mapped[str | None] = mapped_column(String(50), nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     visual_indicators_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    visual_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     agent_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
     rag_sources_json: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
+    execution_trace_json: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, index=True, nullable=False
     )

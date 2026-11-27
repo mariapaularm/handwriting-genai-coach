@@ -13,8 +13,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
-from app.models.db_models import DEFAULT_PROFILE_NAME
-from app.models.schemas import PROFILE_NAME_PATTERN
+from app.models.db_models import DEFAULT_PROFILE_NAME, PROFILE_NAME_PATTERN
 
 # Formato detectado por Pillow -> extensión con la que se guarda.
 ALLOWED_FORMATS: dict[str, str] = {"PNG": "png", "JPEG": "jpg"}
@@ -213,6 +212,12 @@ def save_and_preprocess(
         processed_width=processed.shape[1],
         processed_height=processed.shape[0],
     )
+
+
+def remove_stored_image(stored: StoredImage) -> None:
+    """Elimina los archivos de una imagen guardada (p. ej. si el análisis se rechaza o falla)."""
+    stored.original_path.unlink(missing_ok=True)
+    stored.processed_path.unlink(missing_ok=True)
 
 
 async def validate_upload(file: UploadFile, max_bytes: int | None = None) -> ValidatedImage:
