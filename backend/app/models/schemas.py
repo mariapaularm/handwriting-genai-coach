@@ -103,3 +103,4 @@ class NoHandwritingResponse(BaseModel):
 class ErrorResponse(BaseModel):
     detail: str
     operation: str | None = None
+    provider_detail: str | None = Field(default=None, description="Mensaje original de Gemini, si lo hay")

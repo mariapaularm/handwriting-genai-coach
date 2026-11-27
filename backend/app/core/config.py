@@ -35,12 +35,20 @@ class Settings(BaseSettings):
 
     # Gemini (LangChain)
     GEMINI_API_KEY: SecretStr | None = None
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.8-flash"
     GEMINI_EMBEDDING_MODEL: str = "models/text-embedding-004"
     GEMINI_TEMPERATURE: float = 0.2
-    GEMINI_TIMEOUT_SECONDS: float = 60.0
-    # Reintentos adicionales ante 429 / 5xx / timeouts (backoff exponencial con jitter).
+    # Nivel de razonamiento para modelos Gemini 3.x ("low", "medium", "high"; vacío = el del modelo).
+    # "low" reduce latencia; aun así gemini-3.8-flash ha llegado a tardar ~95 s por petición (nov-2026).
+    GEMINI_THINKING_LEVEL: str | None = "low"
+    # Plazo por intento: se envía a Gemini como X-Server-Timeout (si vence, responde 504 DEADLINE_EXCEEDED).
+    GEMINI_TIMEOUT_SECONDS: float = 180.0
+    # Margen extra del timeout local para que llegue antes el error limpio del servidor.
+    GEMINI_TIMEOUT_GRACE_SECONDS: float = 5.0
+    # Reintentos adicionales ante 429 / 5xx / timeouts (backoff exponencial con jitter)...
     GEMINI_MAX_RETRIES: int = 4
+    # ...sin superar este presupuesto total por operación (evita esperas de varios minutos).
+    GEMINI_MAX_TOTAL_SECONDS: float = 240.0
     GEMINI_RETRY_INITIAL_SECONDS: float = 1.0
     GEMINI_RETRY_MAX_SECONDS: float = 20.0
     # Lado mayor con el que se envía la imagen original al VLM (reduce tokens y latencia).

@@ -159,7 +159,7 @@ class WellnessRetriever:
             logger.info("Construyendo índice RAG: %d documentos, %d chunks", len(documents), len(chunks))
             texts = [chunk.page_content for chunk in chunks]
             vectors = await gemini.call_gemini(
-                "indexación RAG (embeddings)", lambda: self.embeddings.aembed_documents(texts)
+                "indexación RAG (embeddings)", gemini.in_thread(self.embeddings.embed_documents, texts)
             )
             self._collection = await asyncio.to_thread(
                 self._write_collection, client, chunks, vectors, fingerprint
@@ -213,7 +213,9 @@ class WellnessRetriever:
     async def retrieve(self, emotion: str, visual_summary: str, k: int = 3) -> list[RetrievedChunk]:
         collection = await self.ensure_index()
         query = self.build_query(emotion, visual_summary)
-        vector = await gemini.call_gemini("consulta RAG (embedding)", lambda: self.embeddings.aembed_query(query))
+        vector = await gemini.call_gemini(
+            "consulta RAG (embedding)", gemini.in_thread(self.embeddings.embed_query, query)
+        )
         total = await asyncio.to_thread(collection.count)
         if total == 0:
             return []

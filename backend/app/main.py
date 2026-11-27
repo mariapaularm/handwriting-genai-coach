@@ -45,7 +45,7 @@ async def gemini_exception_handler(_request: Request, exc: GeminiError) -> JSONR
     headers = {"Retry-After": "30"} if isinstance(exc, GeminiRateLimitError) else None
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.message, "operation": exc.operation},
+        content={"detail": exc.message, "operation": exc.operation, "provider_detail": exc.provider_detail},
         headers=headers,
     )
 

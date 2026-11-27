@@ -166,15 +166,17 @@ def apply_guardrails(feedback: str, risk_flags: list[str], available_sources: se
     return "\n\n".join(p for p in parts if p), cited
 
 
-async def _invoke_structured(runnable: Any, messages: list[BaseMessage]) -> VisualAnalysisOutput:
-    result = await runnable.ainvoke(messages)
+def _invoke_structured(runnable: Any, messages: list[BaseMessage]) -> VisualAnalysisOutput:
+    """Llamada síncrona (se ejecuta en un hilo vía `gemini.in_thread`)."""
+    result = runnable.invoke(messages)
     if result is None:
         raise OutputParserException("Gemini no devolvió una salida estructurada.")
     return result if isinstance(result, VisualAnalysisOutput) else VisualAnalysisOutput.model_validate(result)
 
 
-async def _invoke_text(model: Any, messages: list[BaseMessage]) -> str:
-    text = _message_text(await model.ainvoke(messages))
+def _invoke_text(model: Any, messages: list[BaseMessage]) -> str:
+    """Llamada síncrona (se ejecuta en un hilo vía `gemini.in_thread`)."""
+    text = _message_text(model.invoke(messages))
     if not text:
         raise OutputParserException("Gemini devolvió una retroalimentación vacía.")
     return text
@@ -192,7 +194,7 @@ async def visual_analysis_node(state: AgentState) -> dict[str, Any]:
     )
     messages = prompts.build_visual_messages(original_url, processed_url)
     structured = gemini.get_chat_model().with_structured_output(VisualAnalysisOutput)
-    visual = await gemini.call_gemini("análisis visual", lambda: _invoke_structured(structured, messages))
+    visual = await gemini.call_gemini("análisis visual", gemini.in_thread(_invoke_structured, structured, messages))
 
     if not visual.contains_handwriting or not visual.transcribed_text.strip():
         reason = (visual.rejection_reason or "").strip() or _DEFAULT_REJECTION
@@ -220,7 +222,7 @@ async def rag_retrieval_node(state: AgentState) -> dict[str, Any]:
     try:
         chunks = await retriever.retrieve_wellness_context(visual.emotion, visual.visual_summary, k=settings.RAG_TOP_K)
     except Exception as exc:  # degradable: la síntesis usa recomendaciones generales
-        message = getattr(exc, "message", None) or type(exc).__name__
+        message = getattr(exc, "message", None) or gemini.describe_error(exc)
         logger.warning("RAG no disponible: %s", message, exc_info=True)
         return {"rag_chunks": [], "_status": "degraded", "_detail": f"RAG no disponible: {message}"}
     sources = sorted({c.source for c in chunks})
@@ -235,7 +237,9 @@ async def synthesis_guardrail_node(state: AgentState) -> dict[str, Any]:
 
     messages = prompts.build_synthesis_messages(visual, state.get("history"), chunks, risk_flags)
     model = gemini.get_chat_model()
-    draft = await gemini.call_gemini("síntesis de retroalimentación", lambda: _invoke_text(model, messages))
+    draft = await gemini.call_gemini(
+        "síntesis de retroalimentación", gemini.in_thread(_invoke_text, model, messages)
+    )
 
     feedback, cited = apply_guardrails(draft, risk_flags, {c.source for c in chunks})
     detail = f"{len(cited)} fuentes citadas" + ("; protocolo de crisis activado" if risk_flags else "")

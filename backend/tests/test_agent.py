@@ -9,6 +9,7 @@ import asyncio
 import io
 import re
 import shutil
+import time
 import unicodedata
 import uuid
 from collections.abc import AsyncIterator
@@ -19,12 +20,12 @@ from typing import Any
 
 import pytest
 from fastmcp import Client
-from google.genai.errors import ClientError
+from google.genai.errors import ClientError, ServerError
 from httpx import ASGITransport, AsyncClient
 from langchain_core.embeddings import Embeddings
 from langchain_core.messages import AIMessage
 from langchain_google_genai._common import GoogleGenerativeAIError
-from langchain_google_genai.chat_models import GoogleRateLimitError
+from langchain_google_genai.chat_models import GoogleAPIError, GoogleRateLimitError
 from PIL import Image
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -155,7 +156,7 @@ class FakeGemini:
         assert schema is VisualAnalysisOutput
         return _FakeStructured(self)
 
-    async def ainvoke(self, messages: Any, **_: Any) -> AIMessage:
+    def invoke(self, messages: Any, **_: Any) -> AIMessage:
         self.synthesis_messages.append(messages)
         return AIMessage(content=self.feedback)
 
@@ -164,19 +165,19 @@ class _FakeStructured:
     def __init__(self, parent: FakeGemini) -> None:
         self.parent = parent
 
-    async def ainvoke(self, messages: Any, **_: Any) -> VisualAnalysisOutput:
+    def invoke(self, messages: Any, **_: Any) -> VisualAnalysisOutput:
         parent = self.parent
         parent.visual_calls += 1
         parent.visual_messages.append(messages)
         if parent.visual_delay:
-            await asyncio.sleep(parent.visual_delay)
+            time.sleep(parent.visual_delay)
         if parent.visual_errors:
             raise parent.visual_errors.pop(0)
         return parent.visual_output
 
 
 def rate_limit_error() -> GoogleRateLimitError:
-    return GoogleRateLimitError("Error calling model 'gemini-2.5-flash' (RESOURCE_EXHAUSTED): 429 quota")
+    return GoogleRateLimitError("Error calling model 'gemini-3.8-flash' (RESOURCE_EXHAUSTED): 429 quota")
 
 
 # ---------------------------------------------------------------------------
@@ -375,8 +376,9 @@ async def test_rate_limit_exhausted_returns_429(api: Api) -> None:
 
 async def test_gemini_timeout_returns_504(api: Api, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "GEMINI_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(settings, "GEMINI_TIMEOUT_GRACE_SECONDS", 0.0)
     monkeypatch.setattr(settings, "GEMINI_MAX_RETRIES", 1)
-    api.fake.visual_delay = 1.0
+    api.fake.visual_delay = 0.3
     response = await post_analyze(api)
     assert response.status_code == 504
     assert api.fake.visual_calls == 2
@@ -662,3 +664,75 @@ def test_guardrails_add_disclaimer_and_strip_unknown_citations() -> None:
     assert text.endswith(WELLNESS_DISCLAIMER)
     assert agent_graph.detect_risk_signals("Pienso en QUITARME LA VIDA") != []
     assert agent_graph.detect_risk_signals("Hoy estudié para el examen") == []
+
+
+DEADLINE_JSON = {"error": {"code": 504, "message": "Deadline expired before operation could complete.", "status": "DEADLINE_EXCEEDED"}}
+
+
+def deadline_error() -> GoogleAPIError:
+    """Reproduce el error real observado con gemini-3.8-flash (504 DEADLINE_EXCEEDED)."""
+    server = ServerError(504, DEADLINE_JSON)
+    try:
+        raise GoogleAPIError(code=504, response_json=server.details, response=None) from server
+    except GoogleAPIError as exc:
+        return exc
+
+
+def test_deadline_exceeded_is_classified_as_timeout_with_real_message() -> None:
+    err = deadline_error()
+    assert gemini.describe_error(err) == "504 DEADLINE_EXCEEDED: Deadline expired before operation could complete."
+    error = gemini.classify_error(err, "análisis visual")
+    assert isinstance(error, gemini.GeminiTimeoutError)
+    assert error.status_code == 504
+    assert "Deadline expired before operation could complete." in error.message
+    assert gemini.is_retryable_error(err) is True
+
+
+async def test_deadline_exceeded_returns_504_with_provider_detail(api: Api) -> None:
+    api.fake.visual_errors = [deadline_error() for _ in range(10)]
+    response = await post_analyze(api)
+    assert response.status_code == 504
+    body = response.json()
+    assert "Deadline expired before operation could complete." in body["detail"]
+    assert body["provider_detail"] == "504 DEADLINE_EXCEEDED: Deadline expired before operation could complete."
+    assert stored_files(api.upload_root) == []
+
+
+async def test_retries_respect_total_time_budget(fast_retries: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "GEMINI_MAX_RETRIES", 50)
+    monkeypatch.setattr(settings, "GEMINI_MAX_TOTAL_SECONDS", 0.2)
+    attempts = 0
+
+    async def slow_failure() -> None:
+        nonlocal attempts
+        attempts += 1
+        await asyncio.sleep(0.08)
+        raise deadline_error()
+
+    with pytest.raises(gemini.GeminiTimeoutError):
+        await gemini.call_gemini("prueba", slow_failure)
+    assert attempts <= 4  # el presupuesto total corta antes de los 51 intentos
+
+
+def test_thinking_level_only_applies_to_gemini_3(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", SecretStr("test-key"))
+    monkeypatch.setattr(settings, "GEMINI_THINKING_LEVEL", "low")
+    monkeypatch.setattr(settings, "GEMINI_MODEL", "gemini-3.8-flash")
+    model = REAL_GET_CHAT_MODEL()
+    assert model.reasoning_effort == "low"
+    assert model.timeout == settings.GEMINI_TIMEOUT_SECONDS
+    monkeypatch.setattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")
+    assert REAL_GET_CHAT_MODEL().reasoning_effort is None
+
+
+async def test_attempt_timeout_never_exceeds_total_budget(fast_retries: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "GEMINI_TIMEOUT_SECONDS", 10.0)
+    monkeypatch.setattr(settings, "GEMINI_MAX_TOTAL_SECONDS", 0.2)
+
+    async def hangs() -> None:
+        await asyncio.sleep(5)
+
+    started = time.perf_counter()
+    with pytest.raises(gemini.GeminiTimeoutError):
+        await gemini.call_gemini("prueba", hangs)
+    assert time.perf_counter() - started < 1.0
