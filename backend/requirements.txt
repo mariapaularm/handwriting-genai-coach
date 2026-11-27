@@ -1,0 +1,21 @@
+# --- API ---
+fastapi==0.165.0
+uvicorn[standard]==0.54.0
+python-multipart==0.0.34
+
+# --- Configuración / validación ---
+pydantic==2.14.4
+pydantic-settings==2.16.3
+
+# --- Base de datos (SQLite async) ---
+sqlalchemy[asyncio]==2.1.9
+aiosqlite==0.22.1
+
+# --- Procesamiento de imágenes ---
+opencv-python-headless==5.1.0.95
+Pillow==13.0.0
+numpy==2.5.5
+
+# --- Testing ---
+pytest==9.2.0
+httpx==0.29.0
