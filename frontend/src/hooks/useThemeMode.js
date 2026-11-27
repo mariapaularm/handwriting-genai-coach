@@ -20,6 +20,12 @@ export function useThemeMode() {
     root.classList.toggle("light", mode === "light");
     root.dataset.theme = mode;
     window.localStorage.setItem(STORAGE_KEY, mode);
+
+    // La barra del navegador acompaña al fondo del tema elegido (no solo al del sistema).
+    const background = mode === "dark" ? "#15140F" : "#F2EDE4";
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+      meta.setAttribute("content", background);
+    });
   }, [mode]);
 
   function toggleMode() {

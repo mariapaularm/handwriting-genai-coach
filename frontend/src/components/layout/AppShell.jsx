@@ -1,63 +1,71 @@
 import { Button, Tooltip } from "@heroui/react";
-import { Moon, Sun } from "lucide-react";
+import { Moon, PenLine, Sun } from "lucide-react";
 
-import TenantSidebar from "./TenantSidebar.jsx";
+import AppSidebar, { ConnectionStatus, WELLBEING_NOTICE } from "./AppSidebar.jsx";
 
-export default function AppShell({
-  children,
-  mode,
-  tenant,
-  tenants,
-  onTenantChange,
-  onToggleMode,
-}) {
+export default function AppShell({ children, mode, backendStatus, onToggleMode }) {
   const ThemeIcon = mode === "dark" ? Sun : Moon;
+  const nextModeLabel = mode === "dark" ? "Usar tema claro" : "Usar tema oscuro";
 
   return (
-    <div className="app-bg min-h-screen bg-background text-foreground">
-      <div className="flex min-h-screen">
-        <TenantSidebar
-          tenant={tenant}
-          tenants={tenants}
-          onTenantChange={onTenantChange}
-        />
+    <div className="min-h-screen bg-canvas text-ink">
+      <a className="skip-link" href="#contenido">
+        Saltar al contenido
+      </a>
 
-        <main className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 border-b border-border/70 bg-background/86 px-4 py-3 backdrop-blur-xl md:px-8">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted">
-                  Análisis emocional
+      <div className="flex min-h-screen">
+        <AppSidebar backendStatus={backendStatus} />
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="px-4 pt-6 pb-2 md:px-8 md:pt-10">
+            <div className="mx-auto flex max-w-7xl items-start justify-between gap-6">
+              <div className="min-w-0 max-w-[62ch]">
+                <p className="mb-4 flex items-center gap-2 text-caption font-semibold text-olive lg:hidden">
+                  <PenLine aria-hidden="true" size={18} />
+                  <span translate="no">Handwriting GenAI Coach</span>
                 </p>
-                <h1 className="truncate text-xl font-semibold md:text-2xl">
-                  Análisis preventivo de escritura
+                <h1 className="font-display text-h1 font-medium tracking-[-0.01em] text-balance md:text-[2.75rem] md:leading-[3.125rem]">
+                  Lo que tu escritura cuenta de cómo estás
                 </h1>
+                <p className="mt-3 text-lead text-pretty text-ink-soft">
+                  Fotografía una hoja escrita a mano. El coach describe tu trazo y te devuelve una lectura orientativa
+                  de tu bienestar, con consejos para hoy.
+                </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2 pt-1">
+                <div className="lg:hidden">
+                  <ConnectionStatus status={backendStatus} />
+                </div>
                 <Tooltip>
                   <Tooltip.Trigger>
                     <Button
-                      aria-label="Cambiar tema"
-                      className="shrink-0"
+                      aria-label={nextModeLabel}
+                      className="border border-card-line bg-paper"
                       isIconOnly
                       onPress={onToggleMode}
                       variant="secondary"
                     >
-                      <ThemeIcon size={18} />
+                      <ThemeIcon aria-hidden="true" size={18} />
                     </Button>
                   </Tooltip.Trigger>
                   <Tooltip.Content showArrow>
                     <Tooltip.Arrow />
-                    Tema {mode === "dark" ? "claro" : "oscuro"}
+                    {nextModeLabel}
                   </Tooltip.Content>
                 </Tooltip>
               </div>
             </div>
           </header>
 
-          <div className="px-4 py-5 md:px-8 md:py-7">{children}</div>
-        </main>
+          <main className="flex-1 px-4 py-6 md:px-8 md:py-8" id="contenido" tabIndex={-1}>
+            {children}
+          </main>
+
+          <footer className="border-t border-line px-4 py-5 text-meta text-ink-soft md:px-8 lg:hidden">
+            <p className="mx-auto max-w-[72ch]">{WELLBEING_NOTICE}</p>
+          </footer>
+        </div>
       </div>
     </div>
   );

@@ -35,11 +35,11 @@ class Settings(BaseSettings):
 
     # Gemini (LangChain)
     GEMINI_API_KEY: SecretStr | None = None
-    GEMINI_MODEL: str = "gemini-3.8-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash"
     GEMINI_EMBEDDING_MODEL: str = "models/text-embedding-004"
     GEMINI_TEMPERATURE: float = 0.2
     # Nivel de razonamiento para modelos Gemini 3.x ("low", "medium", "high"; vacío = el del modelo).
-    # "low" reduce latencia; aun así gemini-3.8-flash ha llegado a tardar ~95 s por petición (nov-2026).
+    # "low" reduce latencia (medido en nov-2026: gemini-3.5-flash ~30 s/petición; gemini-3.8-flash 60-100 s).
     GEMINI_THINKING_LEVEL: str | None = "low"
     # Plazo por intento: se envía a Gemini como X-Server-Timeout (si vence, responde 504 DEADLINE_EXCEEDED).
     GEMINI_TIMEOUT_SECONDS: float = 180.0

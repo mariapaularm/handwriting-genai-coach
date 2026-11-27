@@ -1,59 +1,325 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
-:root,
-[data-theme="light"] {
+/* ==========================================================================
+   Sistema "Cuaderno, lino y oliva": psicología, papel y bienestar.
+   Paleta orgánica unificada: Oliva + Lino + Terracota tostado. Sin azules fríos.
+
+   Jerarquía de superficies (de más profunda a más elevada):
+   1. Ancla editorial   → barra lateral oliva (#3A4D39).
+   2. Lino / pergamino  → fondo base (#F2EDE4).
+   3. Contenedor suave  → lino tostado (#EAE3D5) dentro de las tarjetas.
+   4. Tarjeta           → papel blanco con borde #D5CEC2 y sombra suave.
+   5. Protagonista      → tarjeta de emoción: blanca, franja oliva y detalle de papelería.
+
+   Regla semántica del color:
+   - Oliva     (#3A4D39 / #3E5238) → acción y selección (botones, pestaña activa).
+   - Salvia    (#4A6047 texto, #5E755B / #687D64 gráficos) → lo que hace el sistema.
+   - Terracota (#B86F45) → acento de dato (marcador de puntuación, nodo de síntesis).
+   - Arcilla   (#8F4A2B) → precaución (borrar historial).
+   - Color emocional → solo para etiquetar emociones.
+
+   Tipografía: Fraunces (títulos y palabras humanas), Plus Jakarta Sans (interfaz),
+   JetBrains Mono (identificadores: archivos, URL, modelo).
+   Escala: 12 · 14 · 16 · 18 · 21 · 24 · 36 · 48 px.
+   Pares texto/fondo verificados ≥ 4.5:1 (WCAG AA) en claro y oscuro.
+   ========================================================================== */
+
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
+  --font-serif: "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Escala tipográfica */
+  --text-meta: 0.75rem;
+  --text-meta--line-height: 1.125rem;
+  --text-caption: 0.875rem;
+  --text-caption--line-height: 1.375rem;
+  --text-body: 1rem;
+  --text-body--line-height: 1.5rem;
+  --text-lead: 1.125rem;
+  --text-lead--line-height: 1.75rem;
+  --text-h3: 1.3125rem;
+  --text-h3--line-height: 1.75rem;
+  --text-h2: 1.5rem;
+  --text-h2--line-height: 2rem;
+  --text-h1: 2.25rem;
+  --text-h1--line-height: 2.625rem;
+  --text-display: 3rem;
+  --text-display--line-height: 3.25rem;
+}
+
+/* Utilidades de color ligadas a variables (cambian con el tema). */
+@theme inline {
+  --color-canvas: var(--hw-canvas);
+  --color-paper: var(--hw-paper);
+  --color-line: var(--hw-line);
+  --color-line-strong: var(--hw-line-strong);
+  --color-card-line: var(--hw-card-line);
+  --color-ink: var(--hw-ink);
+  --color-ink-soft: var(--hw-ink-soft);
+  --color-ink-faint: var(--hw-ink-faint);
+  --color-olive: var(--hw-olive);
+  --color-olive-soft: var(--hw-olive-soft);
+  --color-olive-deep: var(--hw-olive-deep);
+  --color-on-olive: var(--hw-on-olive);
+  --color-on-deep: var(--hw-on-deep);
+  --color-salvia: var(--hw-salvia);
+  --color-salvia-graph: var(--hw-salvia-graph);
+  --color-salvia-node: var(--hw-salvia-node);
+  --color-terracota: var(--hw-terracota);
+  --color-lino: var(--hw-lino);
+  --color-lino-soft: var(--hw-lino-soft);
+  --color-lino-hover: var(--hw-lino-hover);
+  --color-field-soft: var(--hw-field-soft);
+  --color-field-line: var(--hw-field-line);
+  --color-alert: var(--hw-alert);
+  --color-alert-soft: var(--hw-alert-soft);
+  --color-caution: var(--hw-caution);
+
+  /* Barra lateral (ancla editorial) */
+  --color-sidebar: var(--hw-sidebar);
+  --color-sidebar-edge: var(--hw-sidebar-edge);
+  --color-sidebar-title: var(--hw-sidebar-title);
+  --color-sidebar-text: var(--hw-sidebar-text);
+  --color-sidebar-step: var(--hw-sidebar-step);
+  --color-sidebar-on-step: var(--hw-sidebar-on-step);
+  --color-sidebar-rule: var(--hw-sidebar-rule);
+  --color-sidebar-badge: var(--hw-sidebar-badge);
+  --color-sidebar-badge-fg: var(--hw-sidebar-badge-fg);
+  --color-sidebar-dot: var(--hw-sidebar-dot);
+  --color-sidebar-alert: var(--hw-sidebar-alert);
+  --color-sidebar-alert-bg: var(--hw-sidebar-alert-bg);
+  --color-sidebar-alert-text: var(--hw-sidebar-alert-text);
+  --color-sidebar-brand: var(--hw-sidebar-brand);
+  --color-sidebar-brand-fg: var(--hw-sidebar-brand-fg);
+}
+
+/* --------------------------------------------------------------------------
+   Tema claro (y valores base). Fuera de capa: prevalece sobre HeroUI.
+   -------------------------------------------------------------------------- */
+:root {
   color-scheme: light;
-  --background: oklch(0.982 0.012 215);
-  --foreground: oklch(0.22 0.025 250);
-  --surface: oklch(0.998 0.004 220);
-  --surface-foreground: oklch(0.22 0.025 250);
-  --surface-secondary: oklch(0.955 0.017 220);
-  --surface-secondary-foreground: oklch(0.26 0.03 245);
-  --surface-tertiary: oklch(0.925 0.027 228);
-  --surface-tertiary-foreground: oklch(0.29 0.04 245);
-  --accent: oklch(0.61 0.14 235);
-  --accent-foreground: oklch(0.99 0.006 220);
-  --accent-soft: oklch(0.925 0.06 218);
-  --accent-soft-foreground: oklch(0.34 0.11 235);
-  --success: oklch(0.65 0.145 165);
-  --success-foreground: oklch(0.995 0.005 160);
-  --warning: oklch(0.74 0.15 78);
-  --warning-foreground: oklch(0.22 0.04 70);
-  --danger: oklch(0.62 0.18 28);
-  --danger-foreground: oklch(0.99 0.006 30);
-  --muted: oklch(0.49 0.035 245);
-  --border: oklch(0.83 0.035 230 / 70%);
-  --radius: 0.5rem;
-  --skeleton-animation: shimmer;
+
+  --hw-canvas: #f2ede4; /* lino / pergamino */
+  --hw-paper: #ffffff;
+  --hw-line: #e4ddd0;
+  --hw-line-strong: #8e8574;
+  --hw-card-line: #d5cec2;
+  --hw-card-shadow: 0 4px 20px rgb(58 77 57 / 0.05);
+  --hw-ink: #1f2a26;
+  --hw-ink-soft: #4f5c56;
+  --hw-ink-faint: #56615c;
+  --hw-olive: #4a5d43;
+  --hw-olive-soft: #e8eee5;
+  --hw-olive-deep: #3a4d39;
+  --hw-on-olive: #ffffff;
+  --hw-on-deep: #faf9f5;
+  --hw-action: #3e5238;
+  --hw-action-hover: #2f3f2a;
+
+  /* Sistema y gráficos */
+  --hw-salvia: #4a6047; /* texto: 6,9:1 sobre blanco */
+  --hw-salvia-graph: #5e755b;
+  --hw-salvia-node: #687d64;
+  --hw-terracota: #b86f45;
+
+  /* Contenedores internos */
+  --hw-lino: #eae3d5;
+  --hw-lino-soft: #f7f3ec;
+  --hw-lino-hover: #dfd7c7;
+  --hw-field-soft: #f7f3ec;
+  --hw-field-line: #8e8574; /* borde de control: 3,3:1 */
+
+  --hw-alert: #9b3d30;
+  --hw-alert-soft: #f8e9e5;
+  --hw-caution: #8a5a12;
+
+  /* Precaución editorial (arcilla) */
+  --hw-clay-bg: #faf2ec;
+  --hw-clay-line: #cfa692;
+  --hw-clay-fg: #8f4a2b;
+  --hw-clay-bg-hover: #f2e1d5;
+  --hw-clay-fg-hover: #6e351c;
+
+  /* Tarjeta protagonista */
+  --hw-feature-shadow: 0 10px 28px rgb(58 77 57 / 0.08);
+  --hw-stationery-tab: #efe1d4;
+  --hw-clip: #a89d8a;
+
+  /* Barra lateral: oliva medio-oscuro con tinta marfil (todo el texto ≥ 7:1, AAA). */
+  --hw-sidebar: #3a4d39;
+  --hw-sidebar-edge: #2c3b2b;
+  --hw-sidebar-title: #faf9f5;
+  --hw-sidebar-text: #e1e8df;
+  --hw-sidebar-step: #e8efe6;
+  --hw-sidebar-on-step: #263525;
+  --hw-sidebar-brand: rgb(250 249 245 / 0.12);
+  --hw-sidebar-brand-fg: #faf9f5;
+  --hw-sidebar-rule: rgb(250 249 245 / 0.18);
+  --hw-sidebar-badge: #d8e8d8;
+  --hw-sidebar-badge-fg: #1d2b1c;
+  --hw-sidebar-dot: #4a5d43;
+  --hw-sidebar-alert: #7a2418;
+  --hw-sidebar-alert-bg: #f1d9d3;
+  --hw-sidebar-alert-text: #ffe2db;
+
+  /* Cuaderno: renglones sepia, margen arcilla */
+  --hw-sheet: #fffdf8;
+  --hw-sheet-rule: rgb(150 120 90 / 0.22);
+  --hw-sheet-margin: rgb(176 82 64 / 0.42);
+
+  /* Emociones (Ánimo bajo pasa de azul pizarra a malva tostado) */
+  --emo-neutral-bg: #e8eee5;
+  --emo-neutral-fg: #3c4d36;
+  --emo-neutral-dot: #6b8461;
+  --emo-anxiety-bg: #f8eedc;
+  --emo-anxiety-fg: #7a4f10;
+  --emo-anxiety-dot: #c08a35;
+  --emo-stress-bg: #f6e6e1;
+  --emo-stress-fg: #8a3a2c;
+  --emo-stress-dot: #c46a55;
+  --emo-depression-bg: #f1e6ec;
+  --emo-depression-fg: #5b4256;
+  --emo-depression-dot: #8e6c84;
+
+  /* HeroUI v3 → tokens del sistema */
+  --background: var(--hw-canvas);
+  --foreground: var(--hw-ink);
+  --surface: var(--hw-paper);
+  --surface-foreground: var(--hw-ink);
+  --surface-secondary: var(--hw-lino);
+  --surface-secondary-foreground: var(--hw-ink);
+  --surface-tertiary: var(--hw-olive-soft);
+  --surface-tertiary-foreground: var(--hw-ink);
+  --overlay: var(--hw-paper);
+  --overlay-foreground: var(--hw-ink);
+  --default: var(--hw-lino);
+  --default-foreground: var(--hw-ink);
+  --accent: var(--hw-action);
+  --accent-foreground: var(--hw-on-olive);
+  --accent-soft: var(--hw-olive-soft);
+  --accent-soft-foreground: var(--hw-olive);
+  --success: var(--hw-olive);
+  --success-foreground: var(--hw-on-olive);
+  --warning: var(--hw-caution);
+  --warning-foreground: #ffffff;
+  --danger: var(--hw-alert);
+  --danger-foreground: #ffffff;
+  --danger-soft: var(--hw-alert-soft);
+  --danger-soft-foreground: var(--hw-alert);
+  --muted: var(--hw-ink-soft);
+  --border: var(--hw-card-line);
+  --separator: var(--hw-line);
+  --focus: var(--hw-olive);
+  --link: var(--hw-salvia);
+  --field-background: var(--hw-field-soft);
+  --field-foreground: var(--hw-ink);
+  --field-border: var(--hw-field-line);
+  --field-border-width: 1px;
+  --field-placeholder: var(--hw-ink-faint);
+  --scrollbar: var(--hw-line-strong);
+  --radius: 0.625rem;
+  --surface-shadow: var(--hw-card-shadow);
+  --overlay-shadow: 0 24px 64px -24px rgb(31 42 38 / 0.32);
+  --backdrop: rgb(31 42 38 / 0.4);
 }
 
-.dark,
-[data-theme="dark"] {
+/* --------------------------------------------------------------------------
+   Tema oscuro: misma jerarquía cálida, invertida en luminosidad.
+   -------------------------------------------------------------------------- */
+:root.dark,
+:root[data-theme="dark"] {
   color-scheme: dark;
-  --background: oklch(0.16 0.018 245);
-  --foreground: oklch(0.96 0.01 220);
-  --surface: oklch(0.205 0.022 245);
-  --surface-foreground: oklch(0.96 0.01 220);
-  --surface-secondary: oklch(0.245 0.026 245);
-  --surface-secondary-foreground: oklch(0.92 0.012 220);
-  --surface-tertiary: oklch(0.29 0.032 245);
-  --surface-tertiary-foreground: oklch(0.9 0.014 220);
-  --accent: oklch(0.72 0.12 205);
-  --accent-foreground: oklch(0.12 0.025 230);
-  --accent-soft: oklch(0.27 0.08 220);
-  --accent-soft-foreground: oklch(0.88 0.05 205);
-  --success: oklch(0.72 0.13 160);
-  --success-foreground: oklch(0.12 0.035 160);
-  --warning: oklch(0.8 0.14 82);
-  --warning-foreground: oklch(0.16 0.035 82);
-  --danger: oklch(0.68 0.17 28);
-  --danger-foreground: oklch(0.12 0.03 28);
-  --muted: oklch(0.75 0.028 235);
-  --border: oklch(0.42 0.035 236 / 72%);
-  --skeleton-animation: pulse;
+
+  --hw-canvas: #15140f;
+  --hw-paper: #1f1d18;
+  --hw-line: #34302a;
+  --hw-line-strong: #7a7262;
+  --hw-card-line: #3a352d;
+  --hw-card-shadow: 0 4px 20px rgb(0 0 0 / 0.28);
+  --hw-ink: #ece7dd;
+  --hw-ink-soft: #b8b1a4;
+  --hw-ink-faint: #a39c8f;
+  --hw-olive: #a3b897;
+  --hw-olive-soft: #283024;
+  --hw-olive-deep: #a3b897;
+  --hw-on-olive: #121a14;
+  --hw-on-deep: #121a14;
+  --hw-action: #a3b897;
+  --hw-action-hover: #b8caad;
+
+  --hw-salvia: #b9cdb3;
+  --hw-salvia-graph: #8fa88a;
+  --hw-salvia-node: #8fa88a;
+  --hw-terracota: #d08a60;
+
+  --hw-lino: #2a2620;
+  --hw-lino-soft: #24211c;
+  --hw-lino-hover: #343028;
+  --hw-field-soft: #22201c;
+  --hw-field-line: #7a7262;
+
+  --hw-alert: #e8998b;
+  --hw-alert-soft: #362420;
+  --hw-caution: #e0b15f;
+
+  --hw-clay-bg: #3a2a22;
+  --hw-clay-line: #7a5040;
+  --hw-clay-fg: #f0b89c;
+  --hw-clay-bg-hover: #46322a;
+  --hw-clay-fg-hover: #f7cdb6;
+
+  --hw-feature-shadow: 0 10px 28px rgb(0 0 0 / 0.35);
+  --hw-stationery-tab: #3a3128;
+  --hw-clip: #8a8170;
+
+  /* Barra lateral en oscuro: verde profundo con texto claro. */
+  --hw-sidebar: #19221a;
+  --hw-sidebar-edge: #0f150e;
+  --hw-sidebar-title: #f6f4ef;
+  --hw-sidebar-text: #c9d3c5;
+  --hw-sidebar-step: #3a4d35;
+  --hw-sidebar-on-step: #f6f4ef;
+  --hw-sidebar-rule: rgb(201 211 197 / 0.22);
+  --hw-sidebar-badge: rgb(143 214 170 / 0.16);
+  --hw-sidebar-badge-fg: #b5e8c8;
+  --hw-sidebar-dot: #b5e8c8;
+  --hw-sidebar-alert: #f2a598;
+  --hw-sidebar-alert-bg: rgb(155 61 48 / 0.25);
+  --hw-sidebar-alert-text: #f2a598;
+  --hw-sidebar-brand: #3a4d35;
+  --hw-sidebar-brand-fg: #f6f4ef;
+
+  --hw-sheet: #23201a;
+  --hw-sheet-rule: rgb(200 180 150 / 0.14);
+  --hw-sheet-margin: rgb(232 153 139 / 0.4);
+
+  --emo-neutral-bg: #26302a;
+  --emo-neutral-fg: #bfd2b5;
+  --emo-neutral-dot: #8fa883;
+  --emo-anxiety-bg: #342b1c;
+  --emo-anxiety-fg: #ebc27e;
+  --emo-anxiety-dot: #d29d47;
+  --emo-stress-bg: #362420;
+  --emo-stress-fg: #eda898;
+  --emo-stress-dot: #d77d68;
+  --emo-depression-bg: #33262f;
+  --emo-depression-fg: #d9b9cf;
+  --emo-depression-dot: #b08aa5;
+
+  --warning-foreground: #1e1608;
+  --danger-foreground: #2a0f0a;
+  --overlay-shadow: 0 0 0 1px rgb(255 255 255 / 0.08), 0 24px 64px -24px rgb(0 0 0 / 0.6);
+  --backdrop: rgb(0 0 0 / 0.6);
 }
 
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
 * {
   box-sizing: border-box;
 }
@@ -66,83 +332,494 @@ body,
 
 body {
   margin: 0;
-  background: var(--background);
-  color: var(--foreground);
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  background: var(--hw-canvas);
+  color: var(--hw-ink);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button,
-input {
+input,
+a {
   font: inherit;
+  touch-action: manipulation;
 }
 
-.app-bg {
-  background-image:
-    linear-gradient(
-      to right,
-      color-mix(in oklch, var(--border) 42%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      to bottom,
-      color-mix(in oklch, var(--border) 34%, transparent) 1px,
-      transparent 1px
-    );
-  background-size: 34px 34px;
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
-.analysis-dropzone {
-  min-height: 286px;
+::selection {
+  background: var(--hw-olive-soft);
+  color: var(--hw-ink);
 }
 
-@media (max-width: 640px) {
-  .analysis-dropzone {
-    min-height: 220px;
-  }
-}
-
-.metric-bar {
-  background: linear-gradient(90deg, var(--bar-start), var(--bar-end));
-}
-
-.risk-ansiedad {
-  --bar-start: #6366f1;
-  --bar-end: #22d3ee;
-}
-
-.risk-estres {
-  --bar-start: #0f766e;
-  --bar-end: #84cc16;
-}
-
-.risk-depresion {
-  --bar-start: #f59e0b;
-  --bar-end: #ef4444;
-}
-
-.risk-neutro {
-  --bar-start: #10b981;
-  --bar-end: #38bdf8;
-}
-
-.scrollbar-soft {
-  scrollbar-color: color-mix(in oklch, var(--accent) 45%, transparent) transparent;
-}
-
-.animate-enter {
-  animation: enter-panel 320ms ease-out both;
-}
-
-@keyframes enter-panel {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
+@layer components {
+  /* Fraunces: tamaños ópticos activos y prosa con más interlineado. */
+  .font-display,
+  .font-serif {
+    font-optical-sizing: auto;
+    letter-spacing: -0.01em;
   }
 
-  to {
+  .prose-serif {
+    font-family: var(--font-serif);
+    font-optical-sizing: auto;
+    font-size: 1.0625rem;
+    line-height: 1.7;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Botón principal: oliva sólido con hover exacto. */
+  .button--primary {
+    --button-bg: var(--hw-action);
+    --button-bg-hover: var(--hw-action-hover);
+    --button-bg-pressed: var(--hw-action-hover);
+    --button-fg: var(--hw-on-olive);
+  }
+
+  /* Botón de precaución editorial (arcilla). Icono y texto comparten currentColor. */
+  .btn-clay {
+    display: inline-flex;
+    min-height: 2rem;
+    align-items: center;
+    gap: 0.375rem;
+    border: 1px solid var(--hw-clay-line);
+    border-radius: 999px;
+    background: var(--hw-clay-bg);
+    padding: 0.25rem 0.875rem;
+    color: var(--hw-clay-fg);
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+    cursor: pointer;
+    transition:
+      background-color 160ms ease,
+      color 160ms ease;
+  }
+
+  .btn-clay svg {
+    flex-shrink: 0;
+    color: currentColor;
+    stroke: currentColor;
     opacity: 1;
-    transform: translateY(0);
+  }
+
+  .btn-clay:hover:not(:disabled) {
+    background: var(--hw-clay-bg-hover);
+    color: var(--hw-clay-fg-hover);
+  }
+
+  .btn-clay:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  /* Salto al contenido */
+  .skip-link {
+    position: absolute;
+    left: 1rem;
+    top: 0.75rem;
+    z-index: 50;
+    transform: translateY(-200%);
+    border-radius: 0.5rem;
+    background: var(--hw-action);
+    color: var(--hw-on-olive);
+    padding: 0.5rem 0.875rem;
+    font-weight: 600;
+  }
+
+  .skip-link:focus-visible {
+    transform: none;
+  }
+
+  /* ------------------------------------------------------------------------
+     Superficies
+     ------------------------------------------------------------------------ */
+
+  /* Tarjeta elevada sobre el lino. */
+  .surface-card {
+    border: 1px solid var(--hw-card-line);
+    border-radius: 1rem;
+    background: var(--hw-paper);
+    box-shadow: var(--hw-card-shadow);
+  }
+
+  /* Tarjeta protagonista (emoción): papel blanco, franja oliva y pestaña de papelería. */
+  .feature-card {
+    position: relative;
+    border: 1px solid var(--hw-card-line);
+    border-left: 5px solid var(--hw-olive-deep);
+    border-radius: 1rem;
+    background: var(--hw-paper);
+    box-shadow: var(--hw-feature-shadow);
+  }
+
+  /* Pestaña desplazada, como la de una carpeta de archivo. */
+  .feature-card::before {
+    content: "";
+    position: absolute;
+    top: -0.6875rem;
+    right: 5.5rem;
+    width: 5.5rem;
+    height: 0.75rem;
+    border: 1px solid var(--hw-card-line);
+    border-bottom: 0;
+    border-radius: 0.5rem 0.5rem 0 0;
+    background: var(--hw-stationery-tab);
+  }
+
+  .feature-clip {
+    position: absolute;
+    top: -0.875rem;
+    right: 1.5rem;
+    color: var(--hw-clip);
+    transform: rotate(-14deg);
+    pointer-events: none;
+  }
+
+  /* Encabezado diferenciado dentro de una tarjeta. */
+  .card-band {
+    border-bottom: 1px solid var(--hw-card-line);
+    background: var(--hw-lino-soft);
+  }
+
+  /* Píldoras resumen de rasgos (interactivas). */
+  .trait-pill {
+    display: inline-flex;
+    min-height: 2.25rem;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--hw-card-line);
+    border-radius: 999px;
+    background: var(--hw-lino-soft);
+    padding: 0.25rem 0.375rem 0.25rem 0.875rem;
+    color: var(--hw-ink);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease,
+      transform 160ms ease;
+  }
+
+  .trait-pill:hover {
+    border-color: var(--hw-olive-deep);
+    background: var(--hw-lino);
+  }
+
+  .trait-pill:active {
+    transform: translateY(1px);
+  }
+
+  .trait-pill-value {
+    display: inline-grid;
+    min-width: 2rem;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--hw-paper);
+    padding: 0.125rem 0.5rem;
+    color: var(--hw-salvia);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Pestañas */
+  .tablist {
+    display: flex;
+    gap: 0.25rem;
+    border: 1px solid var(--hw-card-line);
+    border-radius: 0.875rem;
+    background: var(--hw-lino);
+    padding: 0.25rem;
+  }
+
+  .tab {
+    display: inline-flex;
+    flex: 1 1 0;
+    min-height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.625rem;
+    padding: 0.375rem 0.5rem;
+    color: var(--hw-olive-deep);
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color 160ms ease,
+      color 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  /* En móvil, las etiquetas largas pasan a dos líneas en lugar de recortarse. */
+  @media (max-width: 639px) {
+    .tab {
+      white-space: normal;
+      text-align: center;
+      line-height: 1.15;
+    }
+  }
+
+  .tab:hover {
+    background: var(--hw-lino-hover);
+  }
+
+  .tab[aria-selected="true"] {
+    background: var(--hw-olive-deep);
+    color: var(--hw-on-deep);
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgb(58 77 57 / 0.25);
+  }
+
+  /* ------------------------------------------------------------------------
+     Hoja de cuaderno
+     ------------------------------------------------------------------------ */
+  .notebook {
+    --rule: 2rem;
+    --margin: 3rem;
+    position: relative;
+    border: 1px solid var(--hw-line);
+    border-radius: 0.375rem;
+    background-color: var(--hw-sheet);
+    background-image:
+      linear-gradient(
+        to right,
+        transparent var(--margin),
+        var(--hw-sheet-margin) var(--margin),
+        var(--hw-sheet-margin) calc(var(--margin) + 1px),
+        transparent calc(var(--margin) + 1px)
+      ),
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent calc(var(--rule) - 1px),
+        var(--hw-sheet-rule) calc(var(--rule) - 1px),
+        var(--hw-sheet-rule) var(--rule)
+      );
+    background-position:
+      0 0,
+      0 calc(var(--rule) * 0.5);
+    padding: calc(var(--rule) * 0.5) 1.25rem calc(var(--rule) * 0.5) calc(var(--margin) + 1rem);
+  }
+
+  .notebook-text {
+    font-family: var(--font-serif);
+    font-optical-sizing: auto;
+    font-size: 1.125rem;
+    line-height: var(--rule);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 480px) {
+    .notebook {
+      --margin: 1.75rem;
+      padding-right: 0.875rem;
+    }
+  }
+
+  /* ------------------------------------------------------------------------
+     Zona de carga
+     ------------------------------------------------------------------------ */
+  .dropzone {
+    border: 1.5px dashed var(--hw-field-line);
+    border-radius: 0.75rem;
+    background: var(--hw-field-soft);
+    transition:
+      border-color 160ms ease,
+      background-color 160ms ease;
+  }
+
+  .dropzone:hover {
+    border-color: var(--hw-olive);
+  }
+
+  .dropzone[data-dragging="true"] {
+    border-style: solid;
+    border-color: var(--hw-olive);
+    background: var(--hw-olive-soft);
+  }
+
+  /* ------------------------------------------------------------------------
+     Etiquetas y barras de emoción
+     ------------------------------------------------------------------------ */
+  .emo-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    white-space: nowrap;
+    border-radius: 999px;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+  }
+
+  .emo-tag::before,
+  .emo-dot {
+    content: "";
+    display: inline-block;
+    flex-shrink: 0;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--dot);
+  }
+
+  .emo-neutral { background: var(--emo-neutral-bg); color: var(--emo-neutral-fg); --dot: var(--emo-neutral-dot); }
+  .emo-anxiety { background: var(--emo-anxiety-bg); color: var(--emo-anxiety-fg); --dot: var(--emo-anxiety-dot); }
+  .emo-stress { background: var(--emo-stress-bg); color: var(--emo-stress-fg); --dot: var(--emo-stress-dot); }
+  .emo-depression { background: var(--emo-depression-bg); color: var(--emo-depression-fg); --dot: var(--emo-depression-dot); }
+
+  .emo-text-neutral { color: var(--emo-neutral-fg); --dot: var(--emo-neutral-dot); }
+  .emo-text-anxiety { color: var(--emo-anxiety-fg); --dot: var(--emo-anxiety-dot); }
+  .emo-text-stress { color: var(--emo-stress-fg); --dot: var(--emo-stress-dot); }
+  .emo-text-depression { color: var(--emo-depression-fg); --dot: var(--emo-depression-dot); }
+
+  .emo-bar-neutral { background: var(--emo-neutral-dot); }
+  .emo-bar-anxiety { background: var(--emo-anxiety-dot); }
+  .emo-bar-stress { background: var(--emo-stress-dot); }
+  .emo-bar-depression { background: var(--emo-depression-dot); }
+
+  /* Punto de la emoción con pulso suave. */
+  @keyframes dot-pulse {
+    0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--dot) 55%, transparent); }
+    70% { box-shadow: 0 0 0 10px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+
+  .emo-dot-pulse {
+    animation: dot-pulse 2.4s ease-out infinite;
+  }
+
+  /* ------------------------------------------------------------------------
+     Barra de indicador: pista lino con marcas de banda (33 / 66),
+     relleno salvia y marcador terracota en la puntuación exacta.
+     ------------------------------------------------------------------------ */
+  .meter-track {
+    position: relative;
+    height: 0.5rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--hw-lino);
+  }
+
+  .meter-track::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to right,
+      transparent calc(33.33% - 1px),
+      var(--hw-paper) calc(33.33% - 1px),
+      var(--hw-paper) calc(33.33% + 1px),
+      transparent calc(33.33% + 1px),
+      transparent calc(66.66% - 1px),
+      var(--hw-paper) calc(66.66% - 1px),
+      var(--hw-paper) calc(66.66% + 1px),
+      transparent calc(66.66% + 1px)
+    );
+    pointer-events: none;
+  }
+
+  .meter-marker {
+    position: absolute;
+    top: 50%;
+    z-index: 2;
+    width: 0.875rem;
+    height: 0.875rem;
+    border-radius: 999px;
+    background: var(--hw-terracota);
+    box-shadow: 0 0 0 2.5px var(--hw-paper);
+    transform: translate(-50%, -50%);
+  }
+
+  /* Resalte al llegar desde una píldora resumen. */
+  @keyframes indicator-flash {
+    0% { background-color: color-mix(in oklab, var(--hw-terracota) 18%, transparent); }
+    100% { background-color: transparent; }
+  }
+
+  .indicator-flash {
+    animation: indicator-flash 1.6s ease-out;
+  }
+
+  /* ------------------------------------------------------------------------
+     Anillo de confianza: el trazo se dibuja hasta el porcentaje.
+     ------------------------------------------------------------------------ */
+  @keyframes ring-draw {
+    from { stroke-dashoffset: var(--ring-circumference); }
+  }
+
+  .ring-progress {
+    animation: ring-draw 1100ms cubic-bezier(0.25, 0.8, 0.25, 1) 200ms both;
+  }
+
+  /* ------------------------------------------------------------------------
+     Movimiento: entrada escalonada (fade-up) de las tarjetas de la lectura
+     y el paso activo del progreso.
+     ------------------------------------------------------------------------ */
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .reading-in > * {
+    animation: fade-up 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+
+  .reading-in > *:nth-child(2) { animation-delay: 70ms; }
+  .reading-in > *:nth-child(3) { animation-delay: 140ms; }
+  .reading-in > *:nth-child(4) { animation-delay: 210ms; }
+  .reading-in > *:nth-child(5) { animation-delay: 280ms; }
+  .reading-in > *:nth-child(n + 6) { animation-delay: 350ms; }
+
+  @keyframes step-pulse {
+    0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--hw-salvia) 40%, transparent); }
+    70% { box-shadow: 0 0 0 8px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+
+  .step-active {
+    animation: step-pulse 1.8s ease-out infinite;
+  }
+
+  .scrollbar-soft {
+    scrollbar-width: thin;
+    scrollbar-color: var(--hw-line-strong) transparent;
+  }
+
+  .scrollbar-sidebar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--hw-sidebar-step) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (pointer: fine) {
+  html {
+    overscroll-behavior: none;
   }
 }

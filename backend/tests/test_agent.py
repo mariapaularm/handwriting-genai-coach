@@ -177,7 +177,7 @@ class _FakeStructured:
 
 
 def rate_limit_error() -> GoogleRateLimitError:
-    return GoogleRateLimitError("Error calling model 'gemini-3.8-flash' (RESOURCE_EXHAUSTED): 429 quota")
+    return GoogleRateLimitError("Error calling model 'gemini-3.5-flash' (RESOURCE_EXHAUSTED): 429 quota")
 
 
 # ---------------------------------------------------------------------------
