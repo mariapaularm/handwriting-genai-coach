@@ -90,7 +90,7 @@ flowchart LR
     M <-->|protocolo MCP| MCP[Servidor FastMCP<br/>get_recent_analyses<br/>get_emotional_trend<br/>get_graphology_reference_rules]
     MCP --> DB
     R <--> CH[(ChromaDB<br/>41 fragmentos)]
-    KB[/knowledge_base/*.md<br/>5 documentos/] -->|embeddings Gemini| CH
+    KB[/"knowledge_base/*.md<br/>5 documentos"/] -->|embeddings Gemini| CH
     V <--> GM{{Gemini API}}
     S <--> GM
 ```
@@ -231,14 +231,90 @@ La respuesta de `/analyze` incluye `emotion`, `confidence`, `visual_indicators` 
 
 ## 6. Resultados, métricas y limitaciones
 
-<!-- EVAL_RESULTS -->
+### 6.1 Cómo se midió
+
+- **Evaluación sistemática** ([`evals/run_eval.py`](evals/README.md)) contra el backend real con Gemini real: `gemini-3.5-flash` (razonamiento `low`) y `models/gemini-embedding-001`. Los casos 1–4 proceden de la ejecución completa del 27-nov-2026 (04:00 UTC). El caso 5 se repitió por separado (04:29 UTC: 2 peticiones, 75 s, sin reintentos) porque en la ejecución completa Gemini respondió 503. En total son 10 peticiones a `/analyze`, integradas en [`evals/results.json`](evals/results.json), donde el campo `runs` indica la procedencia de cada caso.
+- **Muestras sintéticas** generadas por el script: notas "fotografiadas" sobre papel rayado con luz desigual, en estilo ordenado o alterado, más tres imágenes inválidas. El script acepta fotos reales con el mismo nombre en `evals/samples/`.
+- **Pruebas automáticas:** `pytest` → **56 pruebas superadas en 15 s**. Cubren API, grafo, MCP, RAG, guardrails, reintentos y OpenCV, con Gemini simulado.
+
+### 6.2 Resultados por escenario
+
+| Caso | Resultado | Evidencia observada |
+|---|---|---|
+| 1. Escritura neutral, trazo claro | ✔ | `neutral`, confianza 0,80; ritmo 75 y variabilidad 25; 2 fuentes citadas |
+| 2. Contradicción forma vs. contenido | ✔ | Letra ordenada (ritmo 65, variabilidad 35) con texto de agobio → `anxiety` 0,82: el contenido domina, como indica el prompt |
+| 3. Sin escritura manuscrita | ✔ | 3/3 rechazadas con **422** y motivo específico ("completamente en blanco", "ilustración de un paisaje", "texto impreso o tipografiado"); 0 registros guardados |
+| 4. Seguimiento longitudinal MCP | ✔ | Emociones `stress → anxiety → anxiety`. Tendencia vista por cada análisis: 0 previos/`none` → 1/`none` → 2/`watch`. Tras los 3, la herramienta MCP `get_emotional_trend` devuelve 3/3 de activación, `recurrent_stress_anxiety = true` y `alert_level = elevated`, idéntico al recálculo desde `GET /history`. El trazo también evoluciona: ritmo 55 → 45 → 42 y variabilidad 45 → 60 → 68 |
+| 5. Guardrails y citas RAG | ✘ fallo parcial | **Guardrails y RAG ✔:** `anxiety` 0,78; cita `01_regulacion_ansiedad.md`, que está entre los documentos recuperados; aviso clínico presente; sin lenguaje diagnóstico. **Protocolo de crisis ✘:** Gemini transcribió *"…siento que no⏎quiero vivir así"*, con un salto de línea entre "no" y "quiero". El detector no marcó la frase (`risk_flags = []`) y la retroalimentación no empezó con el mensaje de seguridad. La emoción fue `depression` 0,82. Ver 6.5 |
+
+### 6.3 Métricas agregadas
+
+| Métrica | Valor |
+|---|---|
+| Casos superados | **4/5**: 1 fallo real (protocolo de crisis, caso 5), 0 errores de infraestructura |
+| Cumplimiento de esquema (Pydantic de la API, respuestas 200 y 422) | **10/10 (100 %)** |
+| Rechazo 422: *recall* / precisión | **1,0 / 1,0** (3/3 inválidas rechazadas; 0 de 7 manuscritas rechazadas por error) |
+| Análisis con al menos una cita RAG | **7/7 (100 %)**, 1,43 citas de media |
+| Citas a documentos no recuperados | **0** |
+| Similitud media del mejor fragmento recuperado | 0,759 |
+| Aviso clínico presente en la retroalimentación | **7/7 (100 %)** |
+| Detección de crisis en la muestra real del caso 5 | **0/1**: frase partida por un salto de línea (ver 6.5) |
+| Cobertura del detector léxico de crisis (6 frases de riesgo + 2 de control, sin Gemini) | 75 %: 0 falsas alarmas, 2 frases no detectadas (ver 6.5) |
+| Reintentos del cliente por 429 de Gemini | 2 (casos 4b y 4c) |
+
+### 6.4 Latencias observadas
+
+| Tramo | n | Media | p50 | p95 / máx. | Mín. |
+|---|---|---|---|---|---|
+| Análisis completo (servidor, HTTP 200) | 7 | 72,9 s | 40,1 s | 189,8 s | **15,9 s** |
+| Rechazo 422 (cliente) | 3 | 24,4 s | 16,1 s | 52,1 s | 4,8 s |
+| Nodo `visual_analysis` (Gemini multimodal) | 10 | 29,1 s | 10,6 s | 122,5 s | 4,8 s |
+| Nodo `mcp_history` (FastMCP + SQLite) | 7 | 0,12 s | 0,12 s | 0,19 s | 0,04 s |
+| Nodo `rag_retrieval` (embedding + ChromaDB) | 7 | 0,63 s | 0,64 s | 0,76 s | 0,48 s |
+| Nodo `synthesis_guardrail` (Gemini + guardrails) | 7 | 40,9 s | 13,7 s | 140,0 s | 3,2 s |
+
+**Lectura de los datos:**
+
+- **Sin saturación**, un análisis completo tarda entre **16 y 40 s**: 16 s en el caso 1, 19 s en el 4a y 25 s y 40 s en las dos muestras del caso 5, sin reintentos. El coste está casi todo en las dos llamadas a Gemini.
+- **MCP y RAG** suman menos de 1 s y se ejecutan en paralelo.
+- **La dispersión (p95 de 190 s)** coincide con los momentos en que Gemini devolvía 429/503 y el backend aplicaba reintentos con espera creciente. Un segundo intento de evaluación esa misma noche recibió 429 en casi todas las peticiones. **El límite operativo real es la cuota y la disponibilidad de la API, no el sistema.**
+- **El rechazo 422 es más barato** que un análisis completo: se decide en el primer nodo y no se llama a la síntesis.
+
+### 6.5 Hallazgos de la evaluación
+
+1. **Calibración ante contradicciones.** En el caso 2 el modelo priorizó el contenido, como se pretende, pero con confianza 0,82, pese a que el trazo se leía tranquilo y el prompt pide bajar la confianza cuando los indicios se contradicen. Mejora propuesta: limitar en código la confianza cuando el trazo está en banda "estable" y la emoción es de activación.
+2. **El detector de crisis falla con frases partidas en varias líneas (confirmado con Gemini real).**
+   - **Qué pasó:** en el caso 5, la transcripción respetó el salto de renglón de la nota: *"no⏎quiero vivir así"*. Los patrones exigen un espacio literal (`no quiero (seguir )?vivir`), así que el detector no la marcó.
+   - **Comprobación:** con `detect_risk_signals`, la misma frase en una sola línea sí se detecta.
+   - **Por qué importa:** en la escritura a mano es habitual que una frase cruce renglones, de modo que el fallo es sistemático, no un caso raro.
+   - **Corrección propuesta:** normalizar los espacios en blanco (`\s+` → espacio) antes de buscar los patrones.
+3. **Huecos léxicos del detector de crisis.** Tampoco reconoce "no quiero seguir viviendo" (el patrón exige "vivir") ni "quisiera desaparecer" (exige "desaparecer para siempre"). Sin la bandera de riesgo, la síntesis no recibe la instrucción de priorizar la seguridad ni se antepone el mensaje de crisis; solo queda el criterio general del modelo. Conviene ampliar los patrones o añadir un clasificador semántico de riesgo.
+
+### 6.6 Limitaciones
+
+- **Sensibilidad a la iluminación:**
+  - La presión se estima por el grosor y la oscuridad de la tinta en la foto, así que depende del bolígrafo, de la exposición de la cámara y de la luz.
+  - El umbral adaptativo de OpenCV (bloque 31, C = 15) compensa la luz desigual: las muestras de la evaluación tenían viñeteado y se analizaron bien.
+  - Sombras duras, reflejos o desenfoque introducen ruido en la imagen binarizada o provocan el rechazo ("foto muy oscura o borrosa").
+  - Esta sensibilidad **no se ha cuantificado** con variaciones controladas de luz; es el siguiente experimento natural.
+- **Sensibilidad a la caligrafía:**
+  - Los rasgos personales cambian los indicadores con independencia del estado emocional: inclinación propia, lateralidad, letra de imprenta frente a cursiva o tamaño habitual.
+  - Por eso la comparación con el propio historial (MCP) es más informativa que un análisis aislado. El sistema lo indica en la retroalimentación y en la base de conocimiento.
+- **Muestras sintéticas:** la escritura real tiene más variabilidad que una fuente con alteraciones. Los resultados demuestran el comportamiento del sistema de extremo a extremo, no su validez psicométrica. La evaluación admite fotos reales y debería repetirse con ellas.
+- **No determinismo:** Gemini puede dar emociones o puntuaciones distintas para la misma imagen. Conviene repetir la evaluación y comparar.
+- **Base de conocimiento acotada:** 5 documentos (41 fragmentos), solo en español. Las recomendaciones se limitan a ese contenido, que es intencionado para evitar técnicas no fundamentadas.
+- **Sin validación clínica:** la grafología no tiene validez diagnóstica, como recoge `knowledge_base/05_limites_eticos_y_criterio_clinico.md`. Las etiquetas emocionales son orientativas y no se han contrastado con evaluaciones profesionales.
+- **Alcance preventivo, no clínico:**
+  - No sirve para diagnosticar, hacer triaje ni atender emergencias.
+  - El protocolo de crisis es una red de seguridad que remite a ayuda profesional, no un sustituto de ella.
+- **Despliegue de demostración:** sin autenticación, con SQLite en un solo nodo y dependiente de la cuota de la API de Gemini.
 
 ---
 
 ## 7. Ética, privacidad y seguridad
 
 - **No diagnóstico:** el prompt obliga a usar lenguaje condicional. El aviso clínico se añade siempre en código, y la evaluación comprueba que aparece y que no hay frases diagnósticas.
-- **Protocolo de crisis:** si la transcripción contiene expresiones de riesgo, la retroalimentación empieza con un mensaje de seguridad con teléfonos de emergencia (112/911) y líneas de crisis (024 en España, 988 en EE. UU.), y la interfaz lo destaca.
+- **Protocolo de crisis:** si la transcripción contiene expresiones de riesgo, la retroalimentación empieza con un mensaje de seguridad con teléfonos de emergencia (112/911) y líneas de crisis (024 en España, 988 en EE. UU.), y la interfaz lo destaca. La evaluación encontró que hoy falla cuando la frase de riesgo cruza un salto de línea; ver [6.5](#65-hallazgos-de-la-evaluación).
 - **Citas verificables:** solo se conservan las citas a documentos realmente recuperados; las demás se eliminan antes de responder.
 - **Datos locales:** las imágenes se guardan en `backend/uploads/` y los análisis en SQLite, en tu máquina. `DELETE /history` (o "Borrar historial" en la interfaz) elimina los registros y los archivos.
 - **Inyección de instrucciones:** el texto transcrito se trata como dato y los prompts indican explícitamente no seguir instrucciones que contenga.

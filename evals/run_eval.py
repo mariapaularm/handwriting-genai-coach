@@ -312,6 +312,12 @@ class Call:
     schema_error: str | None = None
     body: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
+    attempts: int = 0
+
+    @property
+    def infra_error(self) -> bool:
+        """Fallo ajeno a la lógica evaluada: red o errores de Gemini (429/5xx) tras los reintentos."""
+        return self.error is not None or (self.status is not None and self.status not in (200, 400, 422))
 
     def node_ms(self) -> dict[str, float]:
         return {t["node"]: t["duration_ms"] for t in self.body.get("trace", []) if isinstance(t, dict)}
@@ -328,6 +334,7 @@ class Call:
             "server_latency_ms": self.server_ms,
             "node_latency_ms": self.node_ms(),
             "schema_valid": self.schema_valid,
+            "attempts": self.attempts,
         }
         if self.schema_error:
             out["schema_error"] = self.schema_error
@@ -358,9 +365,14 @@ class Call:
 
 
 class Api:
-    def __init__(self, base: str, timeout: float) -> None:
+    RETRYABLE = {429, 502, 503, 504}
+
+    def __init__(self, base: str, timeout: float, pause: float = 0.0, retries: int = 2) -> None:
         self.base = base.rstrip("/")
         self.client = httpx.Client(timeout=httpx.Timeout(timeout, connect=10.0))
+        self.pause = pause
+        self.retries = retries
+        self._last_analyze = 0.0
 
     def health(self) -> dict[str, Any]:
         root = self.base.removesuffix("/api/v1")
@@ -379,7 +391,13 @@ class Api:
     def analyze(self, case: str, sample: Sample, profile: str) -> Call:
         call = Call(case=case, sample=sample.name, origin=sample.origin, expected=sample.expected, profile=profile)
         mime = "image/png" if sample.path.suffix.lower() == ".png" else "image/jpeg"
-        for attempt in range(2):  # un reintento ante 429 respetando Retry-After
+        for attempt in range(self.retries + 1):
+            # Pausa entre análisis para no agotar la cuota por minuto de Gemini.
+            wait = self.pause - (time.perf_counter() - self._last_analyze)
+            if wait > 0:
+                time.sleep(wait)
+            call.attempts = attempt + 1
+            call.error = None
             started = time.perf_counter()
             try:
                 with sample.path.open("rb") as fh:
@@ -391,17 +409,19 @@ class Api:
             except httpx.HTTPError as exc:
                 call.error = f"{type(exc).__name__}: {exc}"
                 call.client_ms = (time.perf_counter() - started) * 1000
+                self._last_analyze = time.perf_counter()
                 return call
             call.client_ms = (time.perf_counter() - started) * 1000
+            self._last_analyze = time.perf_counter()
             call.status = response.status_code
             try:
                 call.body = response.json()
             except ValueError:
                 call.body = {"detail": response.text[:300]}
-            if response.status_code == 429 and attempt == 0:
-                wait = int(response.headers.get("Retry-After", "30"))
-                print(f"    429 de Gemini: reintento en {wait} s…")
-                time.sleep(wait)
+            if response.status_code in self.RETRYABLE and attempt < self.retries:
+                delay = int(response.headers.get("Retry-After") or 45 * (attempt + 1))
+                print(f"    HTTP {response.status_code} de Gemini en {sample.name}: reintento {attempt + 1} en {delay} s…")
+                time.sleep(delay)
                 continue
             break
         self._validate(call)
@@ -437,10 +457,19 @@ class CaseResult:
     details: dict[str, Any]
     calls: list[Call]
 
+    @property
+    def infra_error(self) -> bool:
+        return not self.passed and any(c.infra_error for c in self.calls)
+
+    @property
+    def status(self) -> str:
+        return "passed" if self.passed else ("infra_error" if self.infra_error else "failed")
+
     def to_json(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "title": self.title,
+            "status": self.status,
             "passed": self.passed,
             "checks": self.checks,
             "details": self.details,
@@ -566,15 +595,17 @@ def case_5(api: Api, s: dict[str, Sample]) -> CaseResult:
         _log(crisis)
         calls.append(crisis)
 
+    ok = main.status == 200
     feedback = (main.body.get("feedback") or "").lower()
     cited = main.body.get("cited_sources") or []
     retrieved = {src.get("source") for src in main.body.get("rag_sources", [])}
+    # Las comprobaciones sobre la retroalimentación solo cuentan si hubo respuesta (sin aprobados vacíos).
     checks = {
-        "http_200": main.status == 200,
-        "cited_sources_not_empty": bool(cited),
-        "citations_are_retrieved_docs": bool(cited) and set(cited) <= retrieved,
-        "clinical_disclaimer_present": DISCLAIMER_MARKER in feedback,
-        "no_diagnostic_language": not any(p in feedback for p in DIAGNOSTIC_PHRASES),
+        "http_200": ok,
+        "cited_sources_not_empty": ok and bool(cited),
+        "citations_are_retrieved_docs": ok and bool(cited) and set(cited) <= retrieved,
+        "clinical_disclaimer_present": ok and DISCLAIMER_MARKER in feedback,
+        "no_diagnostic_language": ok and not any(p in feedback for p in DIAGNOSTIC_PHRASES),
     }
     if crisis:
         crisis_feedback = crisis.body.get("feedback") or ""
@@ -688,10 +719,17 @@ def aggregate(results: list[CaseResult]) -> dict[str, Any]:
             "disclaimer_rate": rate(len(disclaimers), len(ok)),
         },
         "cases": {
-            "passed": sum(r.passed for r in results),
+            "passed": sum(r.status == "passed" for r in results),
+            "failed": sum(r.status == "failed" for r in results),
+            "infra_errors": sum(r.status == "infra_error" for r in results),
             "total": len(results),
             "pass_rate": rate(sum(r.passed for r in results), len(results)),
+            # Tasa sobre los casos que llegaron a evaluarse (sin caídas de Gemini).
+            "pass_rate_evaluable": rate(
+                sum(r.passed for r in results), sum(r.status != "infra_error" for r in results)
+            ),
         },
+        "retries": sum(max(0, c.attempts - 1) for c in calls),
     }
 
 
@@ -706,19 +744,25 @@ def _fmt(stats: dict[str, float] | None) -> str:
     return f"media {stats['mean'] / 1000:5.1f} s | p50 {stats['p50'] / 1000:5.1f} s | p95 {stats['p95'] / 1000:5.1f} s (n={stats['n']})"
 
 
-def print_report(results: list[CaseResult], metrics: dict[str, Any]) -> None:
+def print_report(results: list[CaseResult], metrics: dict[str, Any], output: Path) -> None:
     print("\n" + "=" * 78)
     print("RESULTADOS POR CASO")
     print("=" * 78)
     for r in results:
-        print(f"{'✔' if r.passed else '✘'} {r.id}: {r.title}")
+        mark = {"passed": "✔", "failed": "✘", "infra_error": "⚠"}[r.status]
+        suffix = "  (error de infraestructura: Gemini no respondió tras los reintentos)" if r.status == "infra_error" else ""
+        print(f"{mark} {r.id}: {r.title}{suffix}")
         for name, ok in r.checks.items():
             print(f"     {'✔' if ok else '✘'} {name}")
     lat = metrics["latency_ms"]
     print("\n" + "=" * 78)
     print("MÉTRICAS")
     print("=" * 78)
-    print(f"Casos superados ............ {metrics['cases']['passed']}/{metrics['cases']['total']}")
+    cases = metrics["cases"]
+    print(
+        f"Casos superados ............ {cases['passed']}/{cases['total']}"
+        f" (fallos: {cases['failed']}, errores de infraestructura: {cases['infra_errors']}, reintentos: {metrics['retries']})"
+    )
     print(f"Latencia total (cliente) ... {_fmt(lat['client_total_successful'])}")
     print(f"Latencia total (servidor) .. {_fmt(lat['server_total_successful'])}")
     print(f"Latencia de rechazo 422 .... {_fmt(lat['client_total_rejections_422'])}")
@@ -729,7 +773,7 @@ def print_report(results: list[CaseResult], metrics: dict[str, Any]) -> None:
     print(f"Rechazo 422 ................ recall {rj['recall']} | precisión {rj['precision']} ({rj['rejected']}/{rj['invalid_samples']})")
     print(f"Citas RAG .................. tasa {rag['citation_rate']} | media {rag['mean_cited_per_analysis']} | alucinadas {rag['hallucinated_citations']}")
     print(f"Aviso clínico presente ..... {metrics['guardrails']['disclaimer_rate']}")
-    print(f"\nResultados guardados en {RESULTS_PATH.relative_to(PROJECT_ROOT)}")
+    print(f"\nResultados guardados en {output}")
 
 
 def main() -> int:
@@ -740,6 +784,12 @@ def main() -> int:
     parser.add_argument("--font", help="Fuente manuscrita .ttf para generar muestras sintéticas")
     parser.add_argument("--timeout", type=float, default=600.0, help="Timeout por petición en segundos")
     parser.add_argument("--only-samples", action="store_true", help="Solo genera las muestras y termina")
+    parser.add_argument("--pause", type=float, default=8.0, help="Segundos mínimos entre análisis (cuota de Gemini)")
+    parser.add_argument("--retries", type=int, default=2, help="Reintentos ante 429/502/503/504")
+    parser.add_argument(
+        "--output",
+        help="Archivo de resultados (por defecto evals/results.json; con --cases parcial, evals/results_casos-<ids>.json)",
+    )
     args = parser.parse_args()
 
     if args.only_samples:
@@ -748,7 +798,7 @@ def main() -> int:
             print(f"{sample.name:<24} {sample.origin:<10} {sample.path.relative_to(PROJECT_ROOT).as_posix()}")
         return 0
 
-    api = Api(args.api_base, args.timeout)
+    api = Api(args.api_base, args.timeout, pause=args.pause, retries=args.retries)
     try:
         health = api.health()
     except httpx.HTTPError as exc:
@@ -763,6 +813,13 @@ def main() -> int:
         api.clear(profile)
 
     selected = [c.strip() for c in args.cases.split(",") if c.strip() in CASES]
+    # Una ejecución parcial no sobrescribe el informe completo.
+    if args.output:
+        output = Path(args.output).resolve()
+    elif set(selected) == set(CASES):
+        output = RESULTS_PATH
+    else:
+        output = EVALS_DIR / f"results_casos-{'-'.join(selected)}.json"
     results: list[CaseResult] = []
     started = time.perf_counter()
     for case_id in selected:
@@ -787,14 +844,16 @@ def main() -> int:
         "metrics": metrics,
         "cases": [r.to_json() for r in results],
     }
-    RESULTS_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    output.write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
 
     if not args.keep_history:
         for profile in EVAL_PROFILES:
             api.clear(profile)
 
-    print_report(results, metrics)
-    return 0 if all(r.passed for r in results) else 1
+    print_report(results, metrics, output)
+    if any(r.status == "failed" for r in results):
+        return 1
+    return 2 if any(r.status == "infra_error" for r in results) else 0
 
 
 case_1.__doc__ = "escritura neutral con trazo claro"
